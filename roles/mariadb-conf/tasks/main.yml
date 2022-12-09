@@ -1,0 +1,85 @@
+---
+# tasks file for mariadb-conf
+- name: Install phpmyadmin and support packages
+  become: yes
+  apt:
+    name: 
+      - phpmyadmin
+      - php8.2-mbstring
+      - python3-pip
+    state: present
+  notify:
+    - restart apache
+
+- name: Install mysql module prerequisities
+  pip:
+    name: PyMySQL
+    state: present
+    executable: pip3
+
+- name: Include phpmyadmin conf in apache
+  become: yes
+  lineinfile:
+    path: /etc/apache2/apache2.conf
+    line: Include /etc/phpmyadmin/apache.conf
+    regexp: "^Include.+phpmyadmin/.+\\.conf$"
+    insertafter: EOF
+  notify:
+    - restart apache
+  tags:
+    - config
+
+- name: Generate password
+  become: yes
+  shell:
+    cmd: openssl rand -base64 6
+    creates: /root/.my.cnf
+  register: root_pass_output
+
+- name: Db config block
+  when: root_pass_output.changed
+  block:
+    - set_fact:
+        root_pass: "{{ root_pass_output.stdout }}"
+
+    - debug:
+        var: root_pass
+
+    - name: Save root pass into /root/.my.cnf
+      become: yes
+      template:
+        src: my.cnf
+        dest: /root/.my.cnf
+
+
+    - name: Set password for root
+      mysql_user:
+        name: root
+        password: "{{ root_pass }}"
+        host: "{{ item }}"
+        priv: '*.*:ALL,GRANT'
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      loop:
+        - 127.0.0.1
+        - ::1
+        - localhost
+        - "{{ ansible_hostname }}"
+
+    - name: Removes anonymous user account
+      community.mysql.mysql_user:
+        name: ''
+        host: "{{ item }}"
+        state: absent
+        login_unix_socket: /run/mysqld/mysqld.sock
+      loop:
+        - 127.0.0.1
+        - ::1
+        - localhost
+        - "{{ ansible_hostname }}"
+
+    - name: Delete database with name 'bobdata'
+      mysql_db:
+        name: test
+        state: absent
+
+

@@ -1,0 +1,2 @@
+ansible_port: 11022
+ansible_become_pass: '{{ ubuntu_sudo_pass }}'

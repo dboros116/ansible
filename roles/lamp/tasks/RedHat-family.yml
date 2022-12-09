@@ -1,0 +1,24 @@
+- name: Install RedHat block
+  become: yes
+  tags:
+    - install
+  block:
+    - name: Install 3rd party repos
+      dnf:
+        name:
+          - https://rpms.remirepo.net/enterprise/remi-release-9.rpm
+        enablerepo: remi
+        state: present
+        disable_gpg_check: yes
+
+    - name: Install LAMP
+      dnf:
+        name:
+          # - httpd
+          - php81
+          # - php-mysqlnd
+          # - mariadb-server 
+        state: present
+      notify:
+        - start httpd
+        - start mariadb
